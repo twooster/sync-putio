@@ -39,8 +39,14 @@ loop:
 		logger.Println("Scanning remote files")
 		err := scanAndSyncFiles(ctx, logger, config)
 		if err != nil {
+			select {
+			case <-done:
+				break loop
+			default:
+			}
 			logger.Printf("Encountered error, but continuing: %v\n", err)
 		}
+
 		logger.Printf("Scan complete, sleeping %v\n", config.Config.ScanInterval.Duration)
 		timer := time.NewTimer(config.Config.ScanInterval.Duration)
 		select {

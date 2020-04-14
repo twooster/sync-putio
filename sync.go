@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/cavaliercoder/grab"
 	"github.com/putdotio/go-putio"
@@ -27,11 +28,17 @@ func scanAndSyncFiles(ctx context.Context, logger *log.Logger, cfg *Config) erro
 	}
 	defer close(avail)
 
+outer:
 	for _, sync := range cfg.Sync {
 		if sync.Remote == "" {
 			err := syncFolder(ctx, c, logger, rootFolder, sync.Local, false, avail)
 			if err != nil {
-				logger.Printf("Ecountered error syncing remote '%v' (id %v) to '%v', but continuing: %v\n", rootFolder.Name, rootFolder.ID, sync.Local, err)
+				select {
+				case <-ctx.Done():
+					break outer
+				default:
+					logger.Printf("Ecountered error syncing remote '%v' (id %v) to '%v', but continuing: %v\n", rootFolder.Name, rootFolder.ID, sync.Local, err)
+				}
 			}
 		} else {
 			found := false
@@ -41,7 +48,12 @@ func scanAndSyncFiles(ctx context.Context, logger *log.Logger, cfg *Config) erro
 					found = true
 					err := syncFolder(ctx, c, logger, f, sync.Local, false, avail)
 					if err != nil {
-						logger.Printf("Ecountered error syncing remote '%v' (id %v) to '%v', but continuing: %v\n", f.Name, f.ID, sync.Local, err)
+						select {
+						case <-ctx.Done():
+							break outer
+						default:
+							logger.Printf("Ecountered error syncing remote '%v' (id %v) to '%v', but continuing: %v\n", rootFolder.Name, rootFolder.ID, sync.Local, err)
+						}
 					}
 					break inner
 				}
@@ -77,27 +89,29 @@ func syncFolder(ctx context.Context, c *putio.Client, logger *log.Logger, folder
 		logger.Printf("Remote folder %v (id: '%v') empty\n", folder.Name, folder.ID)
 	} else {
 		for _, f := range files {
-			if f.IsDir() {
-				subDir := path.Join(dir, f.Name)
-				if err := syncFolder(ctx, c, logger, f, subDir, true, avail); err != nil {
-					return err
-				}
-			} else {
-				select {
-				case <-ctx.Done():
-					return errors.New("Aborted")
-				case s := <-avail:
-					wg.Add(1)
-					f := f
-					go func() {
+			select {
+			case <-ctx.Done():
+				return errors.New("Aborted")
+			case s := <-avail:
+				wg.Add(1)
+				f := f
+				go func() {
+					if f.IsDir() {
+						subDir := path.Join(dir, f.Name)
+						avail <- s
+						if err := syncFolder(ctx, c, logger, f, subDir, true, avail); err != nil {
+							canDelete = false
+							logger.Printf("Encountered error, but continuing: %v\n", err)
+						}
+					} else {
 						if err := downloadFile(ctx, c, logger, f, dir); err != nil {
 							canDelete = false
 							logger.Printf("Encountered error, but continuing: %v\n", err)
 						}
 						avail <- s
-						wg.Done()
-					}()
-				}
+					}
+					wg.Done()
+				}()
 			}
 		}
 	}
@@ -115,16 +129,54 @@ func syncFolder(ctx context.Context, c *putio.Client, logger *log.Logger, folder
 	return nil
 }
 
+const KIB = 1024
+const MIB = KIB * 1024
+const GIB = MIB * 1024
+
+func bytesToHuman(bytes int64) string {
+	if bytes > GIB {
+		return fmt.Sprintf("%.3f GiB", float64(bytes)/GIB)
+	} else if bytes > MIB {
+		return fmt.Sprintf("%.3f MiB", float64(bytes)/MIB)
+	} else if bytes > KIB {
+		return fmt.Sprintf("%.3f KiB", float64(bytes)/KIB)
+	}
+	return fmt.Sprintf("%v B", bytes)
+}
+
 func downloadFile(ctx context.Context, c *putio.Client, logger *log.Logger, file putio.File, dir string) error {
 	url, err := c.Files.URL(ctx, file.ID, false)
 	if err != nil {
 		return fmt.Errorf("Generating URL failed: %w", err)
 	}
-	logger.Printf("Downloading '%v' (id %v) to %v\n", file.Name, file.ID, dir)
-	_, err = grab.Get(dir, url)
+
+	client := grab.NewClient()
+	req, err := grab.NewRequest(dir, url)
 	if err != nil {
+		return err
+	}
+	req = req.WithContext(ctx)
+
+	logger.Printf("Downloading '%v' (id %v) to %v\n", file.Name, file.ID, dir)
+
+	resp := client.Do(req)
+	t := time.NewTicker(30 * time.Second)
+
+loop:
+	for {
+		select {
+		case <-t.C:
+			logger.Printf("'%v': %v / %v (%.2f%%), %v/s", file.Name, bytesToHuman(resp.BytesComplete()), bytesToHuman(resp.Size), resp.Progress()*100, bytesToHuman(int64(resp.BytesPerSecond())))
+		case <-resp.Done:
+			t.Stop()
+			break loop
+		}
+	}
+
+	if err := resp.Err(); err != nil {
 		return fmt.Errorf("Downloading failed: %w", err)
 	}
+
 	logger.Printf("Successfully downloaded '%v' (id %v)\n", file.Name, file.ID)
 	err = c.Files.Delete(ctx, file.ID)
 	if err != nil {
