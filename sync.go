@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"sync"
 
 	"github.com/cavaliercoder/grab"
 	"github.com/putdotio/go-putio"
@@ -70,6 +71,8 @@ func syncFolder(ctx context.Context, c *putio.Client, logger *log.Logger, folder
 		return fmt.Errorf("Listing remote folder failed: %v", err)
 	}
 
+	wg := sync.WaitGroup{}
+
 	if len(files) == 0 {
 		logger.Printf("Remote folder %v (id: '%v') empty\n", folder.Name, folder.ID)
 	} else {
@@ -84,15 +87,22 @@ func syncFolder(ctx context.Context, c *putio.Client, logger *log.Logger, folder
 				case <-ctx.Done():
 					return errors.New("Aborted")
 				case s := <-avail:
-					if err := downloadFile(ctx, c, logger, f, dir); err != nil {
-						canDelete = false
-						logger.Printf("Encountered error, but continuing: %v\n", err)
-					}
-					avail <- s
+					wg.Add(1)
+					f := f
+					go func() {
+						if err := downloadFile(ctx, c, logger, f, dir); err != nil {
+							canDelete = false
+							logger.Printf("Encountered error, but continuing: %v\n", err)
+						}
+						avail <- s
+						wg.Done()
+					}()
 				}
 			}
 		}
 	}
+
+	wg.Wait()
 
 	if canDelete {
 		err = c.Files.Delete(ctx, folder.ID)
