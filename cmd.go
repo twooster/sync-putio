@@ -34,10 +34,12 @@ func main() {
 
 	done := ctx.Done()
 
+	syncer := NewSyncer(ctx, logger, config)
+
 loop:
 	for {
 		logger.Println("Scanning remote files")
-		err := scanAndSyncFiles(ctx, logger, config)
+		err := syncer.Sync()
 		if err != nil {
 			if err == context.Canceled {
 				break loop

@@ -9,8 +9,8 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-const DEFAULT_MAX_CONCURRENCY = 2
-const DEFAULT_SCAN_INTERVAL = "5m"
+const DefaultMaxConcurrency = 2
+const DefaultScanInterval = "5m"
 
 type Config struct {
 	Config configSection
@@ -18,9 +18,10 @@ type Config struct {
 }
 
 type configSection struct {
-	Token          string
-	MaxConcurrency int
-	ScanInterval   duration
+	Token             string
+	MaxConcurrency    int
+	MaxBytesPerSecond int
+	ScanInterval      duration
 }
 
 type syncSection struct {
@@ -55,10 +56,10 @@ func LoadConfigFromReader(r io.Reader) (*Config, error) {
 		return nil, err
 	}
 	if !meta.IsDefined("config", "maxConcurrency") {
-		c.Config.MaxConcurrency = DEFAULT_MAX_CONCURRENCY
+		c.Config.MaxConcurrency = DefaultMaxConcurrency
 	}
 	if !meta.IsDefined("config", "scanInterval") {
-		dur, _ := time.ParseDuration(DEFAULT_SCAN_INTERVAL)
+		dur, _ := time.ParseDuration(DefaultScanInterval)
 		c.Config.ScanInterval.Duration = dur
 	}
 	for i, s := range c.Sync {

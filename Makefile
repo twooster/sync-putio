@@ -1,5 +1,12 @@
 default: build/raspberry-pi-3/sync-putio
 
+.PHONY: clean
+clean:
+	rm -rf build
+
+.PHONY: all
+all: build/raspberry-pi-3/sync-putio
+
 build:
 	mkdir build
 
