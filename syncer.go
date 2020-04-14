@@ -133,7 +133,7 @@ outer:
 		for _, f := range rootFiles {
 			if f.Name == sync.Remote {
 				found = true
-				err := s.syncFolder(f, sync.Local, false)
+				err := s.syncFolder(f, sync.Local, sync.AutoDir, false)
 				if err != nil {
 					if err == context.Canceled {
 						break outer
@@ -164,7 +164,7 @@ func ensureDir(dir string) error {
 	return nil
 }
 
-func (s *Syncer) syncFolder(folder putio.File, dir string, deleteAfter bool) error {
+func (s *Syncer) syncFolder(folder putio.File, dir string, autoDir bool, deleteAfter bool) error {
 	err := ensureDir(dir)
 	if err != nil {
 		return err
@@ -192,10 +192,20 @@ func (s *Syncer) syncFolder(folder putio.File, dir string, deleteAfter bool) err
 				var err error
 				if f.IsDir() {
 					subDir := path.Join(dir, f.Name)
-					err = s.syncFolder(f, subDir, true)
+					err = s.syncFolder(f, subDir, autoDir, true)
 				} else {
-					err = s.downloadFile(f, dir)
-
+					dir := dir
+					if autoDir {
+						dirName := f.Name
+						if ext := path.Ext(dirName); ext != "" && len(dirName) > len(ext) {
+							dirName = dirName[0 : len(dirName)-len(ext)]
+						}
+						dir = path.Join(dir, dirName)
+						err = ensureDir(dir)
+					}
+					if err == nil {
+						err = s.downloadFile(f, dir)
+					}
 				}
 				if err != nil {
 					if err != context.Canceled {

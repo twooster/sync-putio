@@ -17,7 +17,7 @@ the remote copies of**) files from put.io.
 * [x] Graceful shutdown everywhere
 * [x] File checksum validation
 * [x] Rate limiting
+* [x] Auto directory creation for bare files
 * [ ] Concurrency across multiple sync sources
-* [ ] Auto directory creation for bare files
 * [ ] User-configurable deletion semantics
 * [ ] Staging / completed folders

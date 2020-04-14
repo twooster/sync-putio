@@ -25,8 +25,9 @@ type configSection struct {
 }
 
 type syncSection struct {
-	Remote string
-	Local  string
+	Remote  string
+	Local   string
+	AutoDir bool
 }
 
 type duration struct {
