@@ -13,11 +13,10 @@ import (
 
 	"github.com/cavaliercoder/grab"
 	"github.com/putdotio/go-putio"
-	"golang.org/x/time/rate"
 )
 
 type Syncer struct {
-	RateLimiter *rate.Limiter
+	RateLimiter grab.RateLimiter
 	PutioClient *putio.Client
 	GrabClient  *grab.Client
 	Ctx         context.Context
@@ -27,11 +26,7 @@ type Syncer struct {
 }
 
 func NewSyncer(ctx context.Context, logger *log.Logger, c *Config) *Syncer {
-	limit := rate.Inf
-	if c.Config.MaxBytesPerSecond > 0 {
-		limit = rate.Limit(c.Config.MaxBytesPerSecond)
-	}
-	rateLimiter := rate.NewLimiter(limit, 0)
+	rateLimiter := NewLimiter(c.Config.MaxKbPerSecond * 1024)
 
 	var pool chan struct{}
 	if c.Config.MaxConcurrency > 0 {
@@ -63,13 +58,13 @@ func (s *Syncer) fetchUrlToFile(url string, dst string, checksum []byte) error {
 	s.Logger.Printf("Downloading '%v' to '%v'", url, dst)
 
 	resp := s.GrabClient.Do(req)
-	t := time.NewTicker(60 * time.Second)
+	t := time.NewTicker(30 * time.Second)
 
 loop:
 	for {
 		select {
 		case <-t.C:
-			s.Logger.Printf("Status '%v': %v (%.2f%%) @ %v/s", url, bytesToHuman(resp.BytesComplete()), resp.Progress()*100, bytesToHuman(int64(resp.BytesPerSecond())))
+			s.Logger.Printf("Status '%v': %v (%.1f%%) @ %v/s", url, bytesToHuman(resp.BytesComplete()), resp.Progress()*100, bytesToHuman(int64(resp.BytesPerSecond())))
 		case <-resp.Done:
 			t.Stop()
 			break loop
@@ -143,7 +138,7 @@ outer:
 					if err == context.Canceled {
 						break outer
 					}
-					s.Logger.Printf("Ecountered error syncing remote '%v' to '%v', but continuing: %v\n", rootFolder.Name, sync.Local, err)
+					s.Logger.Printf("Encountered error syncing remote '%v' to '%v', but continuing: %v\n", rootFolder.Name, sync.Local, err)
 				}
 				break inner
 			}
@@ -190,29 +185,25 @@ func (s *Syncer) syncFolder(folder putio.File, dir string, deleteAfter bool) err
 				break
 			}
 
-			if f.IsDir() {
-				f := f
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+			f := f
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				var err error
+				if f.IsDir() {
 					subDir := path.Join(dir, f.Name)
 					err = s.syncFolder(f, subDir, true)
-					if err != nil {
-						if err != context.Canceled {
-							s.Logger.Printf("Encountered error, but continuing: %v\n", err)
-						}
-						deleteAfter = false
-					}
-				}()
-			} else {
-				err = s.downloadFile(f, dir)
+				} else {
+					err = s.downloadFile(f, dir)
+
+				}
 				if err != nil {
 					if err != context.Canceled {
 						s.Logger.Printf("Encountered error, but continuing: %v\n", err)
 					}
 					deleteAfter = false
 				}
-			}
+			}()
 		}
 
 		wg.Wait()
@@ -230,6 +221,7 @@ func (s *Syncer) syncFolder(folder putio.File, dir string, deleteAfter bool) err
 }
 
 func (s *Syncer) downloadFile(f putio.File, dir string) error {
+	s.Logger.Printf("Enqueue %v\n", f.Name)
 	s.acquire()
 	defer s.release()
 

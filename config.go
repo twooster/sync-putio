@@ -18,10 +18,10 @@ type Config struct {
 }
 
 type configSection struct {
-	Token             string
-	MaxConcurrency    int
-	MaxBytesPerSecond int
-	ScanInterval      duration
+	Token          string
+	MaxConcurrency int
+	MaxKbPerSecond int
+	ScanInterval   duration
 }
 
 type syncSection struct {

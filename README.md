@@ -9,9 +9,9 @@ remote copies of) files from put.io.
 * [x] User-configurable concurrent downloads
 * [x] User-configurable scan interval
 * [x] Graceful shutdown everywhere
-* [ ] File hash validation
+* [x] File hash validation
+* [x] Rate limiting
 * [ ] Concurrency across multiple sync sources
-* [ ] Rate limiting
 * [ ] Auto directory creation for bare files
 * [ ] User-configurable deletion semantics
 * [ ] Staging / completed folders

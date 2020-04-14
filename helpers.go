@@ -8,11 +8,11 @@ const GIB = MIB * 1024
 
 func bytesToHuman(bytes int64) string {
 	if bytes > GIB {
-		return fmt.Sprintf("%.3f GiB", float64(bytes)/GIB)
+		return fmt.Sprintf("%.2f GiB", float64(bytes)/GIB)
 	} else if bytes > MIB {
-		return fmt.Sprintf("%.3f MiB", float64(bytes)/MIB)
+		return fmt.Sprintf("%.2f MiB", float64(bytes)/MIB)
 	} else if bytes > KIB {
-		return fmt.Sprintf("%.3f KiB", float64(bytes)/KIB)
+		return fmt.Sprintf("%.2f KiB", float64(bytes)/KIB)
 	}
-	return fmt.Sprintf("%v B", bytes)
+	return fmt.Sprintf("%d B", bytes)
 }
