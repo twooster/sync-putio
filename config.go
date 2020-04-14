@@ -9,17 +9,6 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-/*
-[config]
-token =
-maxConcurrency = 2
-scanInterval = "10m"
-
-[[sync]]
-remote = "movies"
-local = "/var/downloads"
-*/
-
 const DEFAULT_MAX_CONCURRENCY = 2
 const DEFAULT_SCAN_INTERVAL = "5m"
 
@@ -74,7 +63,7 @@ func LoadConfigFromReader(r io.Reader) (*Config, error) {
 	}
 	for i, s := range c.Sync {
 		if s.Local == "" {
-			return nil, fmt.Errorf("Sync entry %d: local directory cannot be empty", i)
+			return nil, fmt.Errorf("Sync entry %d: local path cannot be empty", i)
 		}
 	}
 	return &c, nil
