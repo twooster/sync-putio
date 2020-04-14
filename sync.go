@@ -33,12 +33,10 @@ outer:
 		if sync.Remote == "" {
 			err := syncFolder(ctx, c, logger, rootFolder, sync.Local, false, avail)
 			if err != nil {
-				select {
-				case <-ctx.Done():
+				if err == context.Canceled {
 					break outer
-				default:
-					logger.Printf("Ecountered error syncing remote '%v' (id %v) to '%v', but continuing: %v\n", rootFolder.Name, rootFolder.ID, sync.Local, err)
 				}
+				logger.Printf("Ecountered error syncing remote '%v' (id %v) to '%v', but continuing: %v\n", rootFolder.Name, rootFolder.ID, sync.Local, err)
 			}
 		} else {
 			found := false
@@ -48,12 +46,10 @@ outer:
 					found = true
 					err := syncFolder(ctx, c, logger, f, sync.Local, false, avail)
 					if err != nil {
-						select {
-						case <-ctx.Done():
+						if err == context.Canceled {
 							break outer
-						default:
-							logger.Printf("Ecountered error syncing remote '%v' (id %v) to '%v', but continuing: %v\n", rootFolder.Name, rootFolder.ID, sync.Local, err)
 						}
+						logger.Printf("Ecountered error syncing remote '%v' (id %v) to '%v', but continuing: %v\n", rootFolder.Name, rootFolder.ID, sync.Local, err)
 					}
 					break inner
 				}

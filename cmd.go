@@ -39,10 +39,8 @@ loop:
 		logger.Println("Scanning remote files")
 		err := scanAndSyncFiles(ctx, logger, config)
 		if err != nil {
-			select {
-			case <-done:
+			if err == context.Canceled {
 				break loop
-			default:
 			}
 			logger.Printf("Encountered error, but continuing: %v\n", err)
 		}
