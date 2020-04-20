@@ -133,7 +133,7 @@ outer:
 		for _, f := range rootFiles {
 			if f.Name == sync.Remote {
 				found = true
-				err := s.syncFolder(f, sync.Local, sync.AutoDir, false)
+				err := s.syncFolder(f, sync.Local, sync.AutoDir, true)
 				if err != nil {
 					if err == context.Canceled {
 						break outer
@@ -164,7 +164,7 @@ func ensureDir(dir string) error {
 	return nil
 }
 
-func (s *Syncer) syncFolder(folder putio.File, dir string, autoDir bool, deleteAfter bool) error {
+func (s *Syncer) syncFolder(folder putio.File, dir string, autoDir bool, isRoot bool) error {
 	err := ensureDir(dir)
 	if err != nil {
 		return err
@@ -175,6 +175,7 @@ func (s *Syncer) syncFolder(folder putio.File, dir string, autoDir bool, deleteA
 		return fmt.Errorf("Listing remote folder failed: %v", err)
 	}
 
+	canSafelyDelete := !isRoot
 	if len(files) == 0 {
 		s.Logger.Printf("Remote folder '%v' empty\n", folder.Name)
 	} else {
@@ -192,10 +193,10 @@ func (s *Syncer) syncFolder(folder putio.File, dir string, autoDir bool, deleteA
 				var err error
 				if f.IsDir() {
 					subDir := path.Join(dir, f.Name)
-					err = s.syncFolder(f, subDir, autoDir, true)
+					err = s.syncFolder(f, subDir, autoDir, false)
 				} else {
 					dir := dir
-					if autoDir {
+					if autoDir && isRoot {
 						dirName := f.Name
 						if ext := path.Ext(dirName); ext != "" && len(dirName) > len(ext) {
 							dirName = dirName[0 : len(dirName)-len(ext)]
@@ -211,7 +212,7 @@ func (s *Syncer) syncFolder(folder putio.File, dir string, autoDir bool, deleteA
 					if err != context.Canceled {
 						s.Logger.Printf("Encountered error, but continuing: %v\n", err)
 					}
-					deleteAfter = false
+					canSafelyDelete = false
 				}
 			}()
 		}
@@ -219,7 +220,7 @@ func (s *Syncer) syncFolder(folder putio.File, dir string, autoDir bool, deleteA
 		wg.Wait()
 	}
 
-	if deleteAfter {
+	if canSafelyDelete {
 		err = s.PutioClient.Files.Delete(s.Ctx, folder.ID)
 		if err != nil {
 			return fmt.Errorf("Deleting folder '%v' remotely failed: %v", folder.Name, err)
