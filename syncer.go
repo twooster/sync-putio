@@ -183,21 +183,24 @@ func (s *Syncer) syncFolder(folder putio.File, dir string, autoDir bool, isRoot 
 		wg := sync.WaitGroup{}
 
 		for _, f := range files {
-			if err := s.Ctx.Err(); err != nil {
+			if err = s.Ctx.Err(); err != nil {
+				canSafelyDelete = false
 				break
 			}
 
 			f := f
+			dir := dir
+
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+
 				var err error
 				if f.IsDir() {
 					subDir := path.Join(dir, f.Name)
 					err = s.syncFolder(f, subDir, autoDir, false)
 				} else {
-					dir := dir
-					if autoDir && isRoot {
+					if isRoot && autoDir {
 						dirName := f.Name
 						if ext := path.Ext(dirName); ext != "" && len(dirName) > len(ext) {
 							dirName = dirName[0 : len(dirName)-len(ext)]
