@@ -51,6 +51,7 @@ func (s *Syncer) fetchUrlToFile(url string, dst string, checksum []byte) error {
 	}
 	req = req.WithContext(s.Ctx)
 	req.RateLimiter = s.RateLimiter
+	req.IgnoreRemoteTime = true
 	if checksum != nil {
 		req.SetChecksum(crc32.NewIEEE(), checksum, true)
 	}
